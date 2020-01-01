@@ -23,15 +23,24 @@ this program. If not, see <http://www.gnu.org/licenses/>.
 import subprocess, logging, os, shutil
 from ape_errors import *
 
+try:
+    import exiftool
+except ModuleNotFoundError:
+    exiftool = None
+
 log = logging.getLogger("ape_exporter")
 
 class ApeExporter:
     """Implements photo handling methods using AppleScript and direct file access."""
 
-    def __init__(self, photos_library_path, temp_directory, originals_subdir_name='Originals'):
+    def __init__(self, photos_library_path, temp_directory, originals_subdir_name='Originals', update_exif=False):
         self._photos_library_path = photos_library_path
         self._temp_directory = temp_directory
         self._originals_subdir_name = originals_subdir_name
+        self._update_exif = not not update_exif
+
+        if self._update_exif and exiftool is None:
+            raise GenericExportError("The pyexiftool package is missing to update EXIF information. See http://smarnach.github.io/pyexiftool/")
 
         if os.listdir(temp_directory):
             raise GenericExportError("The temporary directory must be empty (%s)." % temp_directory)
@@ -60,7 +69,7 @@ class ApeExporter:
             for photo in folder['photos']:
                 # Well, I don't know how to link the live photo .mov file
                 if photo['live']:
-                    failed_direct_access.append((photo['uuid'], photo['adjusted'],))
+                    failed_direct_access.append(photo)
                     continue
 
                 source_filename = os.path.join(self._photos_library_path, 'originals', photo['directory'], photo['filename'])
@@ -77,14 +86,14 @@ class ApeExporter:
                     failed_direct_access.append((photo['uuid'], photo['adjusted'],))
 
             # Export missing originals and adjusted photos using AppleScript call of Apple Photos application
-            uuid_list = tuple(photo['uuid'] for photo in folder['photos'] if photo['adjusted'])
-            self._export_media(uuid_list, uuid_list_originals=failed_direct_access, target_path=target_path)
+            export_current = tuple(photo for photo in folder['photos'] if photo['adjusted'])
+            self._export_media(export_current, export_originals=failed_direct_access, target_path=target_path)
 
     def _run_applescript(self, apple_script):
         proc = subprocess.Popen(['osascript', '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         proc.communicate(apple_script)
 
-    def _run_export_applescript(self, uuid_list, options):
+    def _run_export_applescript(self, uuid_list, options=''):
         # Note: The long timeout is needed, otherwise the script sometimes fails with following error:
         #           Photos got an error: AppleEvent timed out. (-1712)
         apple_script = b'''
@@ -102,29 +111,61 @@ class ApeExporter:
         # Run export AppleScript
         self._run_applescript(apple_script)
 
+    def _update_exif(self, photos_list):
+        with exiftool.ExifTool() as exif:
+            for photo in export_current:
+                flags = []
+
+                latitude = photo['latitude']
+                longitude = photo['longitude']
+                keywords = photo['keywords']
+
+                if latitude and longitude:
+                    lat_ref = 'N' if latitude > 0 else 'S'
+                    long_ref = 'E' if longitude > 0 else 'W'
+
+                    flags += [
+                        '-EXIF:GPSLatitude=%f' % abs(latitude),
+                        '-EXIF:GPSLatitudeRef=%s' % lat_ref,
+                        '-EXIF:GPSLongitude=%f' % abs(longitude),
+                        '-EXIF:GPSLongitudeRef=%s' % long_ref
+                    ]
+
+                if keywords:
+                    flags += ["-XMP:TagsList='%s'" % keyword for keyword in keywords]
+
+                if flags:
+                    flags += ['-overwrite_original_in_place', '-P', os.path.join(self._temp_directory, photo['originalfilename'])]
+                    try:
+                        exif.execute(*flags)
+                    except ValueError:
+                        log.error("The 'exiftool' is not running, EXIF wasn't set for %s", photo['originalfilename'])
+
     def _move_temp_files(self, target_path):
         # Move fresh Photos's export to the target directory
         files = os.listdir(self._temp_directory)
         for f in files:
             shutil.move(os.path.join(self._temp_directory, f), target_path)
 
-    def _export_media(self, uuid_list, target_path, uuid_list_originals=None):
+    def _export_media(self, export_current, target_path, export_originals=None):
         # Export the last version of photos
-        if uuid_list:
-            self._run_export_applescript(uuid_list, 'with GPS without using originals')
+        if export_current:
+            self._run_export_applescript((photo['uuid'] for photo in export_current))
+            if exiftool and self._update_exif:
+                self._update_exif(export_current)
             self._move_temp_files(target_path)
 
         # If needed, export also missing originals
-        if uuid_list_originals:
+        if export_originals:
             # Export modified originals to the sub-directory
-            lst = [uuid[0] for uuid in uuid_list_originals if uuid[1]]
-            if lst:
-                self._run_export_applescript(lst, 'with using originals')
+            uuid_list = [photo['uuid'] for photo in export_originals if photo['adjusted']]
+            if uuid_list:
+                self._run_export_applescript(uuid_list, 'with using originals')
                 self._move_temp_files(os.path.join(target_path, self._originals_subdir_name))
             # Export unmodified originals directly to the target directory
-            lst = [uuid[0] for uuid in uuid_list_originals if not uuid[1]]
-            if lst:
-                self._run_export_applescript(lst, 'with using originals')
+            uuid_list = [photo['uuid'] for photo in export_originals if not photo['adjusted']]
+            if uuid_list:
+                self._run_export_applescript(uuid_list, 'with using originals')
                 self._move_temp_files(target_path)
 
     def export_photos(self, album_tree, target_path):

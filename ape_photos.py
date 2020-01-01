@@ -36,28 +36,46 @@ class ApePhotos:
             raise GenericExportError("The database file wasn't not found (%s)." % db_filename)
         self._db.text_factory = lambda x: unicodedata.normalize("NFC", x.decode("utf-8"))
 
-    def _parse_tree(self, parent_id, album_temp, photo_temp):
+    def _parse_tree(self, parent_id, album_temp, photo_temp, keywords_temp):
+        keywords_temp = {i:j for i,j in keywords_temp}
+
         items = []
         for i in album_temp:
-            if i[1] == parent_id:
-                child = {
-                    'id': i[0],
-                    'uuid': i[2],
-                    'name': i[3]
-                }
+            if i[1] != parent_id:
+                continue
 
-                # Add photos
-                photos = [{'id': photo[1], 'uuid': photo[4], 'directory': photo[2], 'filename': photo[3], 'originalfilename': photo[5], 'adjusted': not not photo[6], 'live': photo[7] > 0} for photo in photo_temp if photo[0] == i[0]]
-                if photos:
-                    child['photos'] = photos
+            # Child tree element
+            child = {
+                'id': i[0],
+                'uuid': i[2],
+                'name': i[3]
+            }
 
-                # Add sub-folders
-                children = self._parse_tree(i[0], album_temp, photo_temp)
-                if children:
-                    child['children'] = children
+            # Add photos (if exist)
+            photos = [{
+                'id': photo[1],
+                'uuid': photo[4],
+                'directory': photo[2],
+                'filename': photo[3],
+                'originalfilename': photo[5],
+                'adjusted': not not photo[6],
+                'live': photo[7] > 0,
+                # Additional metadata
+                'latitude': photo[8],
+                'longitude': photo[9],
+                'favourite': photo[10],
+                'keywords': [keywords_temp[int(i)] for i in (photo[11] or '').split(',')]
+                } for photo in photo_temp if photo[0] == i[0]]
+            if photos:
+                child['photos'] = photos
 
-                if photos or children:
-                    items.append(child)
+            # Add sub-folders (if exist)
+            children = self._parse_tree(i[0], album_temp, photo_temp)
+            if children:
+                child['children'] = children
+
+            if photos or children:
+                items.append(child)
 
         return sorted(items, key=lambda child: child['name'])
 
@@ -78,15 +96,23 @@ class ApePhotos:
         cursor.execute("SELECT Z_PK, ZPARENTFOLDER, ZUUID, ZTITLE FROM ZGENERICALBUM WHERE ZTITLE IS NOT NULL")
         album_temp = cursor.fetchall()
 
+        # Fetch keywords
+        cursor.execute("SELECT Z_PK, ZTITLE FROM ZKEYWORD")
+        keywords_temp = cursor.fetchall()
+
         # Fetch photo data
         cursor.execute("""
-            SELECT link.Z_26ALBUMS, zga.Z_PK, zga.ZDIRECTORY, zga.ZFILENAME, zga.ZUUID, zaa.ZORIGINALFILENAME, zga.ZHASADJUSTMENTS, zaa.ZVIDEOCPDISPLAYVALUE
-            FROM ZGENERICASSET zga
-            LEFT JOIN Z_26ASSETS link ON link.Z_34ASSETS = zga.Z_PK
-            LEFT JOIN ZADDITIONALASSETATTRIBUTES zaa ON zaa.ZASSET = zga.Z_PK
+            SELECT link.Z_26ALBUMS, alb.ZTITLE, zga.Z_PK, zga.ZDIRECTORY, zga.ZFILENAME, zga.ZUUID, zaaa.ZORIGINALFILENAME, zga.ZHASADJUSTMENTS, zaaa.ZVIDEOCPDISPLAYVALUE, zga.ZLATITUDE, zga.ZLONGITUDE, zga.ZFAVORITE, group_concat(k.Z_37KEYWORDS)
+            FROM Z_26ASSETS link
+            LEFT JOIN  ZGENERICASSET zga ON link.Z_34ASSETS = zga.Z_PK
+            LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = zga.Z_PK
+            LEFT JOIN ZGENERICALBUM alb ON alb.Z_PK=link.Z_26ALBUMS
+            LEFT JOIN Z_1KEYWORDS k ON k.Z_1ASSETATTRIBUTES = zaaa.Z_PK
+            WHERE zga.ZTRASHEDSTATE=0
+            GROUP BY link.Z_26ALBUMS, zga.Z_PK
             """)
         photo_temp = cursor.fetchall()
 
         # Merge loaded information
         log.debug("Parse album tree with root id %s", root_id)
-        return self._parse_tree(root_id, album_temp, photo_temp)
+        return self._parse_tree(root_id, album_temp, photo_temp, keywords_temp)

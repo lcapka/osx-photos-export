@@ -66,12 +66,15 @@ def main():
                         help='a path where the photos will be exported; if --smbfs is set then it specifies a relative path on the mounted share')
     parser.add_argument('--photos-library-path',
                         help='a path to a photos library; the path shall has the .photoslibrary extension')
+    parser.add_argument('--update_exif', action='store_const', const=True
+                        help='enables EXIF updating; current photos (not originals) EXIFs are updated (GPS location, keywords as tags)')
     args = parser.parse_args()
 
     # Get run arguments
     smbfs_path = args.smbfs or smbfs_path
     destination_path = args.output_path or destination_path
     photos_library_path = args.photos_library_path or photos_library_path
+    update_exif = args.update_exif
 
     # Input validation
     if smbfs_path and (os.path.isabs(destination_path) or destination_path.startswith('~')):
@@ -120,7 +123,7 @@ def main():
             album_tree = photos.fetch_albums()
 
             # Export album tree
-            exporter = ApeExporter(photos_library_path, temp_export, originals_subdir_name=originals_subdir_name)
+            exporter = ApeExporter(photos_library_path, temp_export, originals_subdir_name=originals_subdir_name, update_exif=update_exif)
             exporter.export_photos(album_tree, export_path)
 
 if __name__ == '__main__':
