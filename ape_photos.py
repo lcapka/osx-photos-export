@@ -37,7 +37,7 @@ class ApePhotos:
         self._db.text_factory = lambda x: unicodedata.normalize("NFC", x.decode("utf-8"))
 
     def _parse_tree(self, parent_id, album_temp, photo_temp, keywords_temp):
-        keywords_temp = {i:j for i,j in keywords_temp}
+        keywords_map = {i:j for i,j in keywords_temp}
 
         items = []
         for i in album_temp:
@@ -64,13 +64,13 @@ class ApePhotos:
                 'latitude': photo[8],
                 'longitude': photo[9],
                 'favourite': photo[10],
-                'keywords': [keywords_temp[int(i)] for i in (photo[11] or '').split(',')]
+                'keywords': [kw for kw in [keywords_map.get(int(i), None) for i in str(photo[11] or '').split(',') if i] if kw]
                 } for photo in photo_temp if photo[0] == i[0]]
             if photos:
                 child['photos'] = photos
 
             # Add sub-folders (if exist)
-            children = self._parse_tree(i[0], album_temp, photo_temp)
+            children = self._parse_tree(i[0], album_temp, photo_temp, keywords_temp)
             if children:
                 child['children'] = children
 
@@ -102,11 +102,10 @@ class ApePhotos:
 
         # Fetch photo data
         cursor.execute("""
-            SELECT link.Z_26ALBUMS, alb.ZTITLE, zga.Z_PK, zga.ZDIRECTORY, zga.ZFILENAME, zga.ZUUID, zaaa.ZORIGINALFILENAME, zga.ZHASADJUSTMENTS, zaaa.ZVIDEOCPDISPLAYVALUE, zga.ZLATITUDE, zga.ZLONGITUDE, zga.ZFAVORITE, group_concat(k.Z_37KEYWORDS)
+            SELECT link.Z_26ALBUMS, zga.Z_PK, zga.ZDIRECTORY, zga.ZFILENAME, zga.ZUUID, zaaa.ZORIGINALFILENAME, zga.ZHASADJUSTMENTS, zaaa.ZVIDEOCPDISPLAYVALUE, zga.ZLATITUDE, zga.ZLONGITUDE, zga.ZFAVORITE, group_concat(k.Z_37KEYWORDS)
             FROM Z_26ASSETS link
             LEFT JOIN  ZGENERICASSET zga ON link.Z_34ASSETS = zga.Z_PK
             LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = zga.Z_PK
-            LEFT JOIN ZGENERICALBUM alb ON alb.Z_PK=link.Z_26ALBUMS
             LEFT JOIN Z_1KEYWORDS k ON k.Z_1ASSETATTRIBUTES = zaaa.Z_PK
             WHERE zga.ZTRASHEDSTATE=0
             GROUP BY link.Z_26ALBUMS, zga.Z_PK

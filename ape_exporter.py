@@ -111,9 +111,9 @@ class ApeExporter:
         # Run export AppleScript
         self._run_applescript(apple_script)
 
-    def _update_exif(self, photos_list):
+    def _run_update_exif(self, photos_list):
         with exiftool.ExifTool() as exif:
-            for photo in export_current:
+            for photo in photos_list:
                 flags = []
 
                 latitude = photo['latitude']
@@ -121,21 +121,21 @@ class ApeExporter:
                 keywords = photo['keywords']
 
                 if latitude and longitude:
-                    lat_ref = 'N' if latitude > 0 else 'S'
-                    long_ref = 'E' if longitude > 0 else 'W'
+                    lat_ref = b'N' if latitude > 0 else b'S'
+                    long_ref = b'E' if longitude > 0 else b'W'
 
                     flags += [
-                        '-EXIF:GPSLatitude=%f' % abs(latitude),
-                        '-EXIF:GPSLatitudeRef=%s' % lat_ref,
-                        '-EXIF:GPSLongitude=%f' % abs(longitude),
-                        '-EXIF:GPSLongitudeRef=%s' % long_ref
+                        b'-EXIF:GPSLatitude=%f' % abs(latitude),
+                        b'-EXIF:GPSLatitudeRef=%s' % lat_ref,
+                        b'-EXIF:GPSLongitude=%f' % abs(longitude),
+                        b'-EXIF:GPSLongitudeRef=%s' % long_ref
                     ]
 
                 if keywords:
-                    flags += ["-XMP:TagsList='%s'" % keyword for keyword in keywords]
+                    flags += [b"-XMP:TagsList='%s'" % keyword for keyword in keywords]
 
                 if flags:
-                    flags += ['-overwrite_original_in_place', '-P', os.path.join(self._temp_directory, photo['originalfilename'])]
+                    flags += [b'-overwrite_original_in_place', b'-P', os.path.join(self._temp_directory, photo['originalfilename']).encode('utf-8')]
                     try:
                         exif.execute(*flags)
                     except ValueError:
@@ -152,7 +152,7 @@ class ApeExporter:
         if export_current:
             self._run_export_applescript((photo['uuid'] for photo in export_current))
             if exiftool and self._update_exif:
-                self._update_exif(export_current)
+                self._run_update_exif(export_current)
             self._move_temp_files(target_path)
 
         # If needed, export also missing originals

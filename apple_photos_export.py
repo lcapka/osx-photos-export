@@ -66,7 +66,7 @@ def main():
                         help='a path where the photos will be exported; if --smbfs is set then it specifies a relative path on the mounted share')
     parser.add_argument('--photos-library-path',
                         help='a path to a photos library; the path shall has the .photoslibrary extension')
-    parser.add_argument('--update_exif', action='store_const', const=True
+    parser.add_argument('--update_exif', action='store_const', const=True,
                         help='enables EXIF updating; current photos (not originals) EXIFs are updated (GPS location, keywords as tags)')
     args = parser.parse_args()
 
