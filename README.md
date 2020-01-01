@@ -9,6 +9,8 @@ This Python script is exporting photos from Apple Photos application and placing
 
 - Includes OS anti-sleep protection using **caffeinate** call.
 
+- Optionally updates EXIF information of the current version of the pictures. For those, GPS location and keywords are set.
+
 ## Requirements
 
 Requires Python 3.7 (or newer).
