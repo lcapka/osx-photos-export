@@ -101,11 +101,28 @@ class ApePhotos:
         keywords_temp = cursor.fetchall()
 
         # Fetch photo data
+        # Note: The ZHASADJUSTMENTS columns contains value 1 for all modified photos. But this doesn't mean location.
+        #       Probably - the ZEXTENDEDATTRIBUTES table contains original location while ZGENERICASSET contains current location information.
+        #       Apple probably somehow extends values in ZGENERICASSET, while ZEXTENDEDATTRIBUTES seems to have 8 decimal places only.
+        #       That's why there is that crazy multiplication+round.
         cursor.execute("""
-            SELECT link.Z_26ALBUMS, zga.Z_PK, zga.ZDIRECTORY, zga.ZFILENAME, zga.ZUUID, zaaa.ZORIGINALFILENAME, zga.ZHASADJUSTMENTS, zaaa.ZVIDEOCPDISPLAYVALUE, zga.ZLATITUDE, zga.ZLONGITUDE, zga.ZFAVORITE, group_concat(k.Z_37KEYWORDS)
+            SELECT
+                link.Z_26ALBUMS,
+                zga.Z_PK,
+                zga.ZDIRECTORY,
+                zga.ZFILENAME,
+                zga.ZUUID,
+                zaaa.ZORIGINALFILENAME,
+                zga.ZHASADJUSTMENTS or (round(zea.ZLONGITUDE*100000000) != round(zga.ZLONGITUDE*100000000) or round(zea.ZLATITUDE*100000000) != round(zga.ZLATITUDE*100000000)),
+                zaaa.ZVIDEOCPDISPLAYVALUE,
+                zga.ZLATITUDE,
+                zga.ZLONGITUDE,
+                zga.ZFAVORITE,
+                group_concat(k.Z_37KEYWORDS)
             FROM Z_26ASSETS link
-            LEFT JOIN  ZGENERICASSET zga ON link.Z_34ASSETS = zga.Z_PK
+            LEFT JOIN ZGENERICASSET zga ON link.Z_34ASSETS = zga.Z_PK
             LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = zga.Z_PK
+            LEFT JOIN ZEXTENDEDATTRIBUTES zea ON zea.Z_PK = zga.ZEXTENDEDATTRIBUTES
             LEFT JOIN Z_1KEYWORDS k ON k.Z_1ASSETATTRIBUTES = zaaa.Z_PK
             WHERE zga.ZTRASHEDSTATE=0
             GROUP BY link.Z_26ALBUMS, zga.Z_PK
