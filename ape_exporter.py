@@ -121,7 +121,7 @@ class ApeExporter:
                 longitude = photo['longitude']
                 keywords = photo['keywords']
 
-                if latitude and longitude:
+                if (latitude is float or latitude or int) and (longitude is float or longitude is int) and (-90 <= latitude <= 90) and (-180 <= longitude <= 80):
                     lat_ref = b'N' if latitude > 0 else b'S'
                     long_ref = b'E' if longitude > 0 else b'W'
 
@@ -133,12 +133,12 @@ class ApeExporter:
                     ]
 
                 if keywords:
-                    flags += [b"-XMP:TagsList='%s'" % keyword for keyword in keywords]
+                    flags += [b"-XMP:TagsList='%s'" % keyword.encode('utf-8') for keyword in keywords]
 
                 if flags:
                     flags += [b'-overwrite_original_in_place', b'-P', os.path.join(self._temp_directory, photo['originalfilename']).encode('utf-8')]
                     try:
-                        log.debug("Setting EXIF data %s", flags)
+                        log.debug("Setting EXIF data %s", ' '.join(flag.decode('utf-8') for flag in flags))
                         exif.execute(*flags)
                     except ValueError:
                         log.error("The 'exiftool' is not running, EXIF wasn't set for %s", photo['originalfilename'])

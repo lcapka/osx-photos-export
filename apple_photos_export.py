@@ -42,13 +42,12 @@ __license__ = "GPLv3"
 __version__ = "1.0.0"
 
 def main():
-    logging.basicConfig(stream=None, level=logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
     log = logging.getLogger()
 
     screen_handler = logging.StreamHandler(sys.stdout)
-	screen_handler.setLevel(logging.INFO)
-	screen_handler.setFormatter(formatter)
-	log.addHandler(screen_handler)
+    screen_handler.setLevel(logging.INFO)
+    log.addHandler(screen_handler)
 
     script_name = os.path.splitext(os.path.basename(__file__))[0]
     logfile_filename = script_name + '.log'
@@ -77,7 +76,7 @@ def main():
                         help='a path to a photos library; the path shall has the .photoslibrary extension')
     parser.add_argument('--update_exif', action='store_const', const=True,
                         help='enables EXIF updating; current photos (not originals) EXIFs are updated (GPS location, keywords as tags)')
-    parser.add_argument('--logfile', default=logfile_filename
+    parser.add_argument('--logfile', default=logfile_filename,
                         help='a filename where the logs will be saved')
     parser.add_argument('--verbose', action='store_const', const=True,
                         help='enables debug information')
@@ -109,10 +108,10 @@ def main():
 
     # Finish logger setup
     if verbose:
-    	screen_handler.setLevel(logging.DEBUG)
+        screen_handler.setLevel(logging.DEBUG)
 
     if logfile_filename:
-    	log.addHandler(logging.FileHandler(logfile_filename, encoding='utf-8'))
+        log.addHandler(logging.FileHandler(logfile_filename, encoding='utf-8'))
 
     # Expand home dirs if needed
     if destination_path.startswith('~'):
