@@ -80,6 +80,7 @@ class ApeExporter:
                     target_filename = os.path.join(target_path, photo['originalfilename'])
 
                 try:
+                    log.debug("Copying %s to %s", source_filename, target_filename)
                     shutil.copyfile(source_filename, target_filename)
                 except FileNotFoundError:
                     log.error("Export has failed for %s", photo)
@@ -137,6 +138,7 @@ class ApeExporter:
                 if flags:
                     flags += [b'-overwrite_original_in_place', b'-P', os.path.join(self._temp_directory, photo['originalfilename']).encode('utf-8')]
                     try:
+                        log.debug("Setting EXIF data %s", flags)
                         exif.execute(*flags)
                     except ValueError:
                         log.error("The 'exiftool' is not running, EXIF wasn't set for %s", photo['originalfilename'])
@@ -145,7 +147,9 @@ class ApeExporter:
         # Move fresh Photos's export to the target directory
         files = os.listdir(self._temp_directory)
         for f in files:
-            shutil.move(os.path.join(self._temp_directory, f), target_path)
+            source_filename = os.path.join(self._temp_directory, f)
+            log.debug("Moving scripted export %s to %s", source_filename, target_path)
+            shutil.move(source_filename, target_path)
 
     def _export_media(self, export_current, target_path, export_originals=None):
         # Export the last version of photos
@@ -170,5 +174,6 @@ class ApeExporter:
 
     def export_photos(self, album_tree, target_path):
         """Exports album tree to the specific target directory."""
+        log.info("Exporting album tree...")
         for folder in album_tree:
             self._export_internal(target_path, folder)

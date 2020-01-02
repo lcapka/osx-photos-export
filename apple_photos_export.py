@@ -42,12 +42,20 @@ __license__ = "GPLv3"
 __version__ = "1.0.0"
 
 def main():
-    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    logging.basicConfig(stream=None, level=logging.DEBUG)
     log = logging.getLogger()
+
+    screen_handler = logging.StreamHandler(sys.stdout)
+	screen_handler.setLevel(logging.INFO)
+	screen_handler.setFormatter(formatter)
+	log.addHandler(screen_handler)
+
+    script_name = os.path.splitext(os.path.basename(__file__))[0]
+    logfile_filename = script_name + '.log'
 
     config = configparser.ConfigParser()
     try:
-        config.read(os.path.splitext(os.path.basename(__file__))[0] + '.config', encoding='utf-8')
+        config.read(script_name + '.config', encoding='utf-8')
     except FileNotFoundError:
         # The configuration file is not required.
         pass
@@ -57,6 +65,7 @@ def main():
     destination_path = config.get('JOB', 'output-path', fallback=None)
     photos_library_path = config.get('JOB', 'photos-library-path', fallback=None)
     originals_subdir_name = config.get('MAIN', 'originals-subdir-name', fallback='Originals')
+    update_exif = config.get('MAIN', 'update_exif', fallback=None)
 
     # Try to parse run arguments, pre-configured value will be overriden.
     parser = argparse.ArgumentParser(description='Export script for Apple Photos application library.')
@@ -68,13 +77,19 @@ def main():
                         help='a path to a photos library; the path shall has the .photoslibrary extension')
     parser.add_argument('--update_exif', action='store_const', const=True,
                         help='enables EXIF updating; current photos (not originals) EXIFs are updated (GPS location, keywords as tags)')
+    parser.add_argument('--logfile', default=logfile_filename
+                        help='a filename where the logs will be saved')
+    parser.add_argument('--verbose', action='store_const', const=True,
+                        help='enables debug information')
     args = parser.parse_args()
 
     # Get run arguments
     smbfs_path = args.smbfs or smbfs_path
     destination_path = args.output_path or destination_path
     photos_library_path = args.photos_library_path or photos_library_path
-    update_exif = args.update_exif
+    update_exif = args.update_exif or update_exif
+    logfile_filename = args.logfile or logfile_filename
+    verbose = not not args.verbose
 
     # Input validation
     if smbfs_path and (os.path.isabs(destination_path) or destination_path.startswith('~')):
@@ -91,6 +106,13 @@ def main():
     if not originals_subdir_name:
         log.critical("The sub-directory name for original photos must be set.")
         sys.exit(1)
+
+    # Finish logger setup
+    if verbose:
+    	screen_handler.setLevel(logging.DEBUG)
+
+    if logfile_filename:
+    	log.addHandler(logging.FileHandler(logfile_filename, encoding='utf-8'))
 
     # Expand home dirs if needed
     if destination_path.startswith('~'):

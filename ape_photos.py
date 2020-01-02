@@ -95,10 +95,12 @@ class ApePhotos:
         # Fetch album data
         cursor.execute("SELECT Z_PK, ZPARENTFOLDER, ZUUID, ZTITLE FROM ZGENERICALBUM WHERE ZTITLE IS NOT NULL")
         album_temp = cursor.fetchall()
+        log.debug("%s albums found...", len(album_temp))
 
         # Fetch keywords
         cursor.execute("SELECT Z_PK, ZTITLE FROM ZKEYWORD")
         keywords_temp = cursor.fetchall()
+        log.debug("%s keywords found...", len(album_temp))
 
         # Fetch photo data
         # Note: The ZHASADJUSTMENTS columns contains value 1 for all modified photos. But this doesn't mean location.
@@ -128,7 +130,8 @@ class ApePhotos:
             GROUP BY link.Z_26ALBUMS, zga.Z_PK
             """)
         photo_temp = cursor.fetchall()
+        log.debug("%s photo records found...", len(photo_temp))
 
         # Merge loaded information
-        log.debug("Parse album tree with root id %s", root_id)
+        log.debug("Parsing album tree with root id %s", root_id)
         return self._parse_tree(root_id, album_temp, photo_temp, keywords_temp)

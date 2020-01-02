@@ -34,11 +34,13 @@ class ApeMountPoint:
 
     def __enter__(self):
         if self._smbfs_path is not None:
+            log.debug("Mounting %s to %s", self._smbfs_path, self._mount_point)
             os.makedirs(self._mount_point, exist_ok=True)
             with subprocess.Popen(['mount', '-t', 'smbfs', self._smbfs_path, self._mount_point], stdin=None) as proc:
                 pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._smbfs_path is not None:
+            log.debug("Unmounting %s", self._mount_point)
             with subprocess.Popen(['umount', self._mount_point], stdin=None) as proc:
                 pass
