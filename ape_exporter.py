@@ -32,6 +32,7 @@ log = logging.getLogger("ape_exporter")
 
 re_jpeg = re.compile(r'\.jpg$', re.IGNORECASE)
 
+
 class ApeExporter:
     """Implements photo handling methods using AppleScript and direct file access."""
 
@@ -75,27 +76,35 @@ class ApeExporter:
                     continue
 
                 source_filename = os.path.join(self._photos_library_path, 'originals', photo['directory'], photo['filename'])
+
+                # Use temporary file to do the EXIF update below, if needed.
+                temp_filename = os.path.join(self._temp_directory, photo['originalfilename'])
+
                 # Store originals for adjusted/modified photos in the Originals sub-directory.
                 if photo['adjusted']:
                     target_filename = os.path.join(target_path, self._originals_subdir_name, photo['originalfilename'])
                 else:
                     target_filename = os.path.join(target_path, photo['originalfilename'])
 
+                request_exif_update = self._update_exif and photo['has_exif_data']
+
                 try:
                     log.debug("Copying %s to %s", source_filename, target_filename)
-                    shutil.copyfile(source_filename, target_filename)
+                    shutil.copyfile(source_filename, temp_filename if request_exif_update else target_filename)
                 except FileNotFoundError:
                     log.error("Export has failed for %s", photo)
                     failed_direct_access.append((photo['uuid'], photo['adjusted'],))
                     continue
 
-                if self._update_exif:
+                # If exif update required...
+                if request_exif_update:
                     self._run_update_exif([{
                             'latitude': photo['latitude'],
                             'longitude': photo['longitude'],
                             'keywords': photo['keywords'],
-                            'filename': target_filename
+                            'filename': temp_filename
                         }])
+                    shutil.move(temp_filename, target_filename)
 
             # Export missing originals and adjusted photos using AppleScript call of Apple Photos application
             export_current = tuple(photo for photo in folder['photos'] if photo['adjusted'])
@@ -127,7 +136,7 @@ class ApeExporter:
         if not self._update_exif:
             return
 
-        with exiftool.ExifTool() as exif:
+        with exiftool.ExifTool() as exif_tool:
             for data in data_list:
                 flags = []
 
@@ -135,27 +144,27 @@ class ApeExporter:
                 longitude = data['longitude']
                 keywords = data['keywords']
 
-                if (latitude is float or latitude or int) and (longitude is float or longitude is int) and (-90 <= latitude <= 90) and (-180 <= longitude <= 80):
-                    lat_ref = b'N' if latitude > 0 else b'S'
-                    long_ref = b'E' if longitude > 0 else b'W'
+                if latitude is not None and longitude is not None:
+                    lat_ref = 'N' if latitude > 0 else 'S'
+                    long_ref = 'E' if longitude > 0 else 'W'
 
                     flags += [
-                        b'-EXIF:GPSLatitude=%f' % abs(latitude),
-                        b'-EXIF:GPSLatitudeRef=%s' % lat_ref,
-                        b'-EXIF:GPSLongitude=%f' % abs(longitude),
-                        b'-EXIF:GPSLongitudeRef=%s' % long_ref
+                        '-EXIF:GPSLatitude=%f' % abs(latitude),
+                        '-EXIF:GPSLatitudeRef=%s' % lat_ref,
+                        '-EXIF:GPSLongitude=%f' % abs(longitude),
+                        '-EXIF:GPSLongitudeRef=%s' % long_ref
                     ]
 
                 if keywords:
-                    flags += [b"-XMP:TagsList=%s" % keyword.encode('utf-8') for keyword in keywords]
+                    flags += ["-Subject=%s" % keyword for keyword in keywords]
 
                 if flags:
-                    flags += [b'-overwrite_original_in_place', b'-P', data['filename'].encode('utf-8')]
+                    flags += ['-overwrite_original_in_place', '-P', data['filename']]
                     try:
-                        log.debug("Setting EXIF data %s", ' '.join(flag.decode('utf-8') for flag in flags))
-                        exif.execute(*flags)
+                        log.debug("Setting EXIF data %s", ' '.join(flag for flag in flags))
+                        log.debug("  %s", exif_tool.execute_json(*flags))
                     except ValueError:
-                        log.error("The 'exiftool' is not running, EXIF wasn't set for %s", data['filename'])
+                        pass
 
     def _move_temp_files(self, target_path):
         # Move fresh Photos's export to the target directory
@@ -170,8 +179,7 @@ class ApeExporter:
             return expected_filename
 
         # A new Apple Photos exports .jpeg if the original photo has .jpg extension. Try this one if original filename wasn't found.
-        expected_filename = re_jpeg.sub('jpeg', expected_filename, 1)
-        return expected_filename
+        return re_jpeg.sub('.jpeg', expected_filename)
 
     def _export_media(self, export_current, target_path, export_originals=None):
         # Export the last version of photos
@@ -182,7 +190,7 @@ class ApeExporter:
                     'longitude': photo['longitude'],
                     'keywords': photo['keywords'],
                     'filename': self._validate_filename(os.path.join(self._temp_directory, photo['originalfilename']))
-                } for photo in export_current])
+                } for photo in export_current if photo['has_exif_data']])
             self._move_temp_files(target_path)
 
         # If needed, export also missing originals
@@ -190,24 +198,24 @@ class ApeExporter:
             # Export modified originals to the sub-directory
             photo_list = [photo for photo in export_originals if photo['adjusted']]
             if photo_list:
-                self._run_export_applescript(photo_list, 'with using originals')
+                self._run_export_applescript((photo['uuid'] for photo in photo_list), 'with using originals')
                 self._run_update_exif([{
                         'latitude': photo['latitude'],
                         'longitude': photo['longitude'],
                         'keywords': photo['keywords'],
                         'filename': self._validate_filename(os.path.join(self._temp_directory, photo['originalfilename']))
-                    } for photo in photo_list])
+                    } for photo in photo_list if photo['has_exif_data']])
                 self._move_temp_files(os.path.join(target_path, self._originals_subdir_name))
             # Export unmodified originals directly to the target directory
-            photo_list = [photo['uuid'] for photo in export_originals if not photo['adjusted']]
+            photo_list = [photo for photo in export_originals if not photo['adjusted']]
             if photo_list:
-                self._run_export_applescript(photo_list, 'with using originals')
+                self._run_export_applescript((photo['uuid'] for photo in photo_list), 'with using originals')
                 self._run_update_exif([{
                         'latitude': photo['latitude'],
                         'longitude': photo['longitude'],
                         'keywords': photo['keywords'],
                         'filename': self._validate_filename(os.path.join(self._temp_directory, photo['originalfilename']))
-                    } for photo in photo_list])
+                    } for photo in photo_list if photo['has_exif_data']])
                 self._move_temp_files(target_path)
 
     def export_photos(self, album_tree, target_path):

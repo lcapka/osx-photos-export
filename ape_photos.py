@@ -52,20 +52,34 @@ class ApePhotos:
             }
 
             # Add photos (if exist)
-            photos = [{
-                'id': photo[1],
-                'uuid': photo[4],
-                'directory': photo[2],
-                'filename': photo[3],
-                'originalfilename': photo[5],
-                'adjusted': not not photo[6],
-                'live': photo[7] > 0,
-                # Additional metadata
-                'latitude': photo[8],
-                'longitude': photo[9],
-                'favourite': photo[10],
-                'keywords': [kw for kw in [keywords_map.get(int(i), None) for i in str(photo[11] or '').split(',') if i] if kw]
-                } for photo in photo_temp if photo[0] == i[0]]
+            photos = []
+            for photo in photo_temp:
+                if photo[0] != i[0]:
+                    continue
+
+                # Check data
+                latitude, longitude = photo[8:10]
+                gps_valid = (latitude is float or latitude or int) and (longitude is float or longitude is int) and (-90 <= latitude <= 90) and (-180 <= longitude <= 80)
+                if not gps_valid:
+                    latitude = longitude = None
+                keywords_list = [kw for kw in [keywords_map.get(int(i), None) for i in str(photo[11] or '').split(',') if i] if kw]
+
+                photos.append({
+                    'id': photo[1],
+                    'uuid': photo[4],
+                    'directory': photo[2],
+                    'filename': photo[3],
+                    'originalfilename': photo[5],
+                    'adjusted': not not photo[6],
+                    'live': photo[7] > 0,
+                    # Additional metadata
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'favourite': photo[10],
+                    'keywords': keywords_list,
+                    'has_exif_data': any(keywords_list) or gps_valid
+                    })
+
             if photos:
                 child['photos'] = photos
 
