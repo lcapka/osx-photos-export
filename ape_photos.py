@@ -100,7 +100,7 @@ class ApePhotos:
         # Fetch keywords
         cursor.execute("SELECT Z_PK, ZTITLE FROM ZKEYWORD")
         keywords_temp = cursor.fetchall()
-        log.debug("%s keywords found...", len(album_temp))
+        log.debug("%s keywords found...", len(keywords_temp))
 
         # Fetch photo data
         # Note: The ZHASADJUSTMENTS columns contains value 1 for all modified photos. But this doesn't mean location.
