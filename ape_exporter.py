@@ -20,13 +20,15 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-import subprocess, logging, os, shutil, re
+import subprocess, logging, os, shutil, re, json
 from ape_errors import *
 
 try:
     import exiftool
+    exif_tool = exiftool.ExifTool()
+    exif_tool.start()
 except ModuleNotFoundError:
-    exiftool = None
+    exif_tool = None
 
 log = logging.getLogger("ape_exporter")
 
@@ -40,9 +42,9 @@ class ApeExporter:
         self._photos_library_path = photos_library_path
         self._temp_directory = temp_directory
         self._originals_subdir_name = originals_subdir_name
-        self._update_exif = not not update_exif and exiftool
+        self._update_exif = not not update_exif and exif_tool
 
-        if not not update_exif and exiftool is None:
+        if not not update_exif and exif_tool is None:
             raise GenericExportError("The pyexiftool package is missing to update EXIF information. See http://smarnach.github.io/pyexiftool/")
 
         if os.listdir(temp_directory):
@@ -136,35 +138,36 @@ class ApeExporter:
         if not self._update_exif:
             return
 
-        with exiftool.ExifTool() as exif_tool:
-            for data in data_list:
-                flags = []
+        for data in data_list:
+            flags = []
 
-                latitude = data['latitude']
-                longitude = data['longitude']
-                keywords = data['keywords']
+            latitude = data['latitude']
+            longitude = data['longitude']
+            keywords = data['keywords']
 
-                if latitude is not None and longitude is not None:
-                    lat_ref = 'N' if latitude > 0 else 'S'
-                    long_ref = 'E' if longitude > 0 else 'W'
+            if latitude is not None and longitude is not None:
+                lat_ref = 'N' if latitude > 0 else 'S'
+                long_ref = 'E' if longitude > 0 else 'W'
 
-                    flags += [
-                        '-EXIF:GPSLatitude=%f' % abs(latitude),
-                        '-EXIF:GPSLatitudeRef=%s' % lat_ref,
-                        '-EXIF:GPSLongitude=%f' % abs(longitude),
-                        '-EXIF:GPSLongitudeRef=%s' % long_ref
-                    ]
+                flags += [
+                    '-EXIF:GPSLatitude=%f' % abs(latitude),
+                    '-EXIF:GPSLatitudeRef=%s' % lat_ref,
+                    '-EXIF:GPSLongitude=%f' % abs(longitude),
+                    '-EXIF:GPSLongitudeRef=%s' % long_ref
+                ]
 
-                if keywords:
-                    flags += ["-Subject=%s" % keyword for keyword in keywords]
+            if keywords:
+                flags += ["-Subject=%s" % keyword for keyword in keywords]
 
-                if flags:
-                    flags += ['-overwrite_original_in_place', '-P', data['filename']]
-                    try:
-                        log.debug("Setting EXIF data %s", ' '.join(flag for flag in flags))
-                        exif_tool.execute_json(*flags)
-                    except ValueError:
-                        pass
+            if flags:
+                flags += ['-overwrite_original_in_place', '-P', data['filename']]
+                try:
+                    log.debug("Setting EXIF data %s", ' '.join(flag for flag in flags))
+                    exif_tool.execute_json(*flags)
+                except json.decoder.JSONDecodeError:
+                    pass
+                except ValueError as e:
+                    log.error("EXIF setting has failed - %s - for %s." % (e, data['filename'],))
 
     def _move_temp_files(self, target_path):
         # Move fresh Photos's export to the target directory
