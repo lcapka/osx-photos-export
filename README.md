@@ -5,7 +5,7 @@ This Python script is exporting photos from Apple Photos application and placing
 
 - It exports originals and the current version of the pictures.
 
-- Contains Samba auto-mount/unmount feature which enables to export pictures directly to Samba share.
+- Contains network shares auto-mount/umount feature which enables to export pictures directly to network shares.
 
 - Includes OS anti-sleep protection using **caffeinate** call.
 
@@ -17,4 +17,4 @@ Requires Python 3.7 (or newer).
 
 ## Notes
 
-- Uses **~/.photos_export_mountpoint/** directory as a mount point if the Samba URL is used.
+- Uses **~/.photos_export_mountpoint/** directory as a mount point if the auto-mount/umount is used.

@@ -35,6 +35,7 @@ import sqlite3, subprocess, logging, os, codecs, sys, unicodedata, tempfile, shu
 from ape_mountpoint import ApeMountPoint
 from ape_exporter import ApeExporter
 from ape_photos import ApePhotos
+from ape_errors import *
 
 __author__ = "Ladislav Čapka"
 __copyright__ = "Copyright 2019, Ladislav Čapka"
@@ -42,13 +43,6 @@ __license__ = "GPLv3"
 __version__ = "1.0.0"
 
 def main():
-    logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
-    log = logging.getLogger()
-
-    screen_handler = logging.StreamHandler(sys.stdout)
-    screen_handler.setLevel(logging.INFO)
-    log.addHandler(screen_handler)
-
     script_name = os.path.splitext(os.path.basename(__file__))[0]
     logfile_filename = script_name + '.log'
 
@@ -148,8 +142,22 @@ def main():
             exporter.export_photos(album_tree, export_path)
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
+    log = logging.getLogger()
+
+    screen_handler = logging.StreamHandler(sys.stdout)
+    screen_handler.setLevel(logging.INFO)
+    log.addHandler(screen_handler)
+
     if sys.platform != 'darwin':
         log.critical("This script can run on macOS operating system only.")
         sys.exit(1)
 
-    main()
+    try:
+        main()
+    except GenericExportError as e:
+        log.critical(str(e))
+        sys.exit(1)
+    except Exception as e:
+        log.exception("Fatal error has occured.", exc_info=e)
+        sys.exit(1)

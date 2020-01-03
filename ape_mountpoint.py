@@ -37,7 +37,29 @@ class ApeMountPoint:
             log.debug("Mounting %s to %s", self._smbfs_path, self._mount_point)
             os.makedirs(self._mount_point, exist_ok=True)
             with subprocess.Popen(['mount', '-t', 'smbfs', self._smbfs_path, self._mount_point], stdin=None) as proc:
-                pass
+                proc.wait()
+                exit_code = proc.returncode
+                if exit_code:
+                    # Upper bits are not defined
+                    exit_code = exit_code & 127
+                    errors = []
+                    return_strings = (
+                        "incorrect invocation or permissions",
+                        "system error (out of memory, cannot fork, no more loop devices)",
+                        "internal mount bug",
+                        "user interrupt",
+                        "problems writing or locking /etc/mtab",
+                        "mount failure",
+                        "some mount succeeded"
+                        )
+                    bit = 0
+                    while exit_code:
+                        if exit_code & 1 == 1:
+                            errors.append(return_strings[bit])
+                        exit_code >>= 1
+                        bit += 1
+                    raise GenericExportError("Mount has failed: {0}".format(', '.join(errors)).rstrip(': '))
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._smbfs_path is not None:

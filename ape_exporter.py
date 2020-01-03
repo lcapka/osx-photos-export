@@ -162,7 +162,7 @@ class ApeExporter:
                     flags += ['-overwrite_original_in_place', '-P', data['filename']]
                     try:
                         log.debug("Setting EXIF data %s", ' '.join(flag for flag in flags))
-                        log.debug("  %s", exif_tool.execute_json(*flags))
+                        exif_tool.execute_json(*flags)
                     except ValueError:
                         pass
 
