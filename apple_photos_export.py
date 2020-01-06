@@ -58,7 +58,7 @@ def main():
     destination_path = config.get('JOB', 'output-path', fallback=None)
     photos_library_path = config.get('JOB', 'photos-library-path', fallback=None)
     originals_subdir_name = config.get('MAIN', 'originals-subdir-name', fallback='Originals')
-    update_exif = config.get('MAIN', 'update_exif', fallback=None)
+    update_exif = config.getboolean('MAIN', 'update_exif', fallback=False)
 
     # Try to parse run arguments, pre-configured value will be overriden.
     parser = argparse.ArgumentParser(description='Export script for Apple Photos application library.')

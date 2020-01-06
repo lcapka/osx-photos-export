@@ -59,7 +59,7 @@ class ApePhotos:
 
                 # Check data
                 latitude, longitude = photo[8:10]
-                gps_valid = (latitude is float or latitude or int) and (longitude is float or longitude is int) and (-90 <= latitude <= 90) and (-180 <= longitude <= 80)
+                gps_valid = isinstance(latitude, (int, float,)) and isinstance(longitude, (int, float,)) and (-90 <= latitude <= 90) and (-180 <= longitude <= 80)
                 if not gps_valid:
                     latitude = longitude = None
                 keywords_list = [kw for kw in [keywords_map.get(int(i), None) for i in str(photo[11] or '').split(',') if i] if kw]

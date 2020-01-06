@@ -26,7 +26,6 @@ from ape_errors import *
 try:
     import exiftool
     exif_tool = exiftool.ExifTool()
-    exif_tool.start()
 except ModuleNotFoundError:
     exif_tool = None
 
@@ -52,6 +51,9 @@ class ApeExporter:
 
         if not originals_subdir_name:
             raise GenericExportError("The originals sub-directory must be set.")
+
+        if not exif_tool.running:
+            exif_tool.start()
 
     def _export_internal(self, target_path, folder):
         target_path = os.path.join(target_path, folder['name'])
@@ -91,8 +93,9 @@ class ApeExporter:
                 request_exif_update = self._update_exif and photo['has_exif_data']
 
                 try:
-                    log.debug("Copying %s to %s", source_filename, target_filename)
-                    shutil.copyfile(source_filename, temp_filename if request_exif_update else target_filename)
+                    to_filename = temp_filename if request_exif_update else target_filename
+                    log.debug("Copying %s to %s", source_filename, to_filename)
+                    shutil.copyfile(source_filename, to_filename)
                 except FileNotFoundError:
                     log.error("Export has failed for %s", photo)
                     failed_direct_access.append((photo['uuid'], photo['adjusted'],))
@@ -106,6 +109,7 @@ class ApeExporter:
                             'keywords': photo['keywords'],
                             'filename': temp_filename
                         }])
+                    log.debug("Moving %s to %s", temp_filename, target_filename)
                     shutil.move(temp_filename, target_filename)
 
             # Export missing originals and adjusted photos using AppleScript call of Apple Photos application
