@@ -129,7 +129,7 @@ class ApePhotos:
                 zga.ZFILENAME,
                 zga.ZUUID,
                 zaaa.ZORIGINALFILENAME,
-                zga.ZHASADJUSTMENTS or (round(zea.ZLONGITUDE*100000000) != round(zga.ZLONGITUDE*100000000) or round(zea.ZLATITUDE*100000000) != round(zga.ZLATITUDE*100000000)),
+                zga.ZHASADJUSTMENTS,
                 zaaa.ZVIDEOCPDISPLAYVALUE,
                 zga.ZLATITUDE,
                 zga.ZLONGITUDE,

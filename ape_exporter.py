@@ -98,7 +98,7 @@ class ApeExporter:
                     shutil.copyfile(source_filename, to_filename)
                 except FileNotFoundError:
                     log.error("Export has failed for %s", photo)
-                    failed_direct_access.append((photo['uuid'], photo['adjusted'],))
+                    failed_direct_access.append(photo)
                     continue
 
                 # If exif update required...
