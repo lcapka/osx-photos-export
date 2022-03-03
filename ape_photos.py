@@ -28,6 +28,75 @@ log = logging.getLogger("ape_photos")
 class ApePhotos:
     """Implements Photos related method"""
 
+    QUERY_VERSIONS = [
+                """
+                SELECT
+                    link.Z_27ALBUMS,
+                    zga.Z_PK,
+                    zga.ZDIRECTORY,
+                    zga.ZFILENAME,
+                    zga.ZUUID,
+                    zaaa.ZORIGINALFILENAME,
+                    zga.ZHASADJUSTMENTS,
+                    zaaa.ZVIDEOCPDISPLAYVALUE,
+                    zga.ZLATITUDE,
+                    zga.ZLONGITUDE,
+                    zga.ZFAVORITE,
+                    group_concat(k.Z_38KEYWORDS)
+                FROM Z_27ASSETS link
+                LEFT JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK
+                LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = link.Z_3ASSETS
+                LEFT JOIN ZEXTENDEDATTRIBUTES zea ON zea.Z_PK = zga.ZEXTENDEDATTRIBUTES
+                LEFT JOIN Z_1KEYWORDS k ON k.Z_1ASSETATTRIBUTES = zaaa.Z_PK
+                WHERE zga.ZTRASHEDSTATE=0
+                GROUP BY link.Z_27ALBUMS, zga.Z_PK
+                """,
+                """
+                SELECT
+                    link.Z_26ALBUMS,
+                    zga.Z_PK,
+                    zga.ZDIRECTORY,
+                    zga.ZFILENAME,
+                    zga.ZUUID,
+                    zaaa.ZORIGINALFILENAME,
+                    zga.ZHASADJUSTMENTS,
+                    zaaa.ZVIDEOCPDISPLAYVALUE,
+                    zga.ZLATITUDE,
+                    zga.ZLONGITUDE,
+                    zga.ZFAVORITE,
+                    group_concat(k.Z_37KEYWORDS)
+                FROM Z_26ASSETS link
+                LEFT JOIN ZGENERICASSET zga ON link.Z_34ASSETS = zga.Z_PK
+                LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = link.Z_34ASSETS
+                LEFT JOIN ZEXTENDEDATTRIBUTES zea ON zea.Z_PK = zga.ZEXTENDEDATTRIBUTES
+                LEFT JOIN Z_1KEYWORDS k ON k.Z_1ASSETATTRIBUTES = zaaa.Z_PK
+                WHERE zga.ZTRASHEDSTATE=0
+                GROUP BY link.Z_26ALBUMS, zga.Z_PK
+                """,
+                """
+                SELECT
+                    link.Z_26ALBUMS,
+                    link.Z_3ASSETS,
+                    zga.ZDIRECTORY,
+                    zga.ZFILENAME,
+                    zga.ZUUID,
+                    zaaa.ZORIGINALFILENAME,
+                    zga.ZHASADJUSTMENTS,
+                    zaaa.ZVIDEOCPDISPLAYVALUE,
+                    zga.ZLATITUDE,
+                    zga.ZLONGITUDE,
+                    zga.ZFAVORITE,
+                    group_concat(k.Z_36KEYWORDS)
+                FROM Z_26ASSETS link
+                LEFT JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK
+                LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = link.Z_3ASSETS
+                LEFT JOIN ZEXTENDEDATTRIBUTES zea ON zea.Z_PK = zga.ZEXTENDEDATTRIBUTES
+                LEFT JOIN Z_1KEYWORDS k ON k.Z_1ASSETATTRIBUTES = zaaa.Z_PK
+                WHERE zga.ZTRASHEDSTATE=0
+                GROUP BY link.Z_26ALBUMS, zga.Z_PK
+                """
+    ]
+
     def __init__(self, photos_library_path):
         db_filename = os.path.join(photos_library_path, 'database', 'Photos.sqlite')
         try:
@@ -121,29 +190,15 @@ class ApePhotos:
         #       Probably - the ZEXTENDEDATTRIBUTES table contains original location while ZGENERICASSET contains current location information.
         #       Apple probably somehow extends values in ZGENERICASSET, while ZEXTENDEDATTRIBUTES seems to have 8 decimal places only.
         #       That's why there is that crazy multiplication+round.
-        cursor.execute("""
-            SELECT
-                link.Z_26ALBUMS,
-                zga.Z_PK,
-                zga.ZDIRECTORY,
-                zga.ZFILENAME,
-                zga.ZUUID,
-                zaaa.ZORIGINALFILENAME,
-                zga.ZHASADJUSTMENTS,
-                zaaa.ZVIDEOCPDISPLAYVALUE,
-                zga.ZLATITUDE,
-                zga.ZLONGITUDE,
-                zga.ZFAVORITE,
-                group_concat(k.Z_37KEYWORDS)
-            FROM Z_26ASSETS link
-            LEFT JOIN ZGENERICASSET zga ON link.Z_34ASSETS = zga.Z_PK
-            LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = zga.Z_PK
-            LEFT JOIN ZEXTENDEDATTRIBUTES zea ON zea.Z_PK = zga.ZEXTENDEDATTRIBUTES
-            LEFT JOIN Z_1KEYWORDS k ON k.Z_1ASSETATTRIBUTES = zaaa.Z_PK
-            WHERE zga.ZTRASHEDSTATE=0
-            GROUP BY link.Z_26ALBUMS, zga.Z_PK
-            """)
-        photo_temp = cursor.fetchall()
+        error = None
+        for query in ApePhotos.QUERY_VERSIONS:
+            try:
+                cursor.execute(query)
+                photo_temp = cursor.fetchall()
+            except sqlite3.OperationalError as e:
+                error = e
+        if error is not None:
+            raise error
         log.debug("%s photo records found...", len(photo_temp))
 
         # Merge loaded information
