@@ -195,6 +195,7 @@ class ApePhotos:
             try:
                 cursor.execute(query)
                 photo_temp = cursor.fetchall()
+                break
             except sqlite3.OperationalError as e:
                 error = e
         if error is not None:
