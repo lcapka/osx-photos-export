@@ -32,6 +32,7 @@ except ModuleNotFoundError:
 log = logging.getLogger("ape_exporter")
 
 re_jpeg = re.compile(r'\.jpg$', re.IGNORECASE)
+re_movies = re.compile(r'\.(mov|mp4)$', re.IGNORECASE)
 
 
 class ApeExporter:
@@ -53,7 +54,10 @@ class ApeExporter:
             raise GenericExportError("The originals sub-directory must be set.")
 
         if not exif_tool.running:
-            exif_tool.start()
+            if 'start' in dir(exif_tool):
+                exif_tool.start()
+            elif 'run' in dir(exif_tool):
+                exif_tool.run()
 
     def _export_internal(self, target_path, folder):
         target_path = os.path.join(target_path, folder['name'])
@@ -143,6 +147,10 @@ class ApeExporter:
             return
 
         for data in data_list:
+            filename = data['filename']
+            if re_movies.match(filename):
+                continue
+
             flags = []
 
             latitude = data['latitude']
@@ -164,14 +172,16 @@ class ApeExporter:
                 flags += ["-Subject=%s" % keyword for keyword in keywords]
 
             if flags:
-                flags += ['-overwrite_original_in_place', '-P', data['filename']]
+                flags += ['-overwrite_original_in_place', '-P', filename]
                 try:
                     log.debug("Setting EXIF data %s", ' '.join(flag for flag in flags))
-                    exif_tool.execute_json(*flags)
+                    r = exif_tool.execute(*flags)
+                    if ('1 image files updated' not in r) and ('1 image files unchanged' not in r):
+                        raise ValueError(r)
                 except json.decoder.JSONDecodeError:
                     pass
                 except ValueError as e:
-                    log.error("EXIF setting has failed - %s - for %s." % (e, data['filename'],))
+                    log.error("EXIF setting has failed - %s - for %s." % (e, filename,))
 
     def _move_temp_files(self, target_path):
         # Move fresh Photos's export to the target directory

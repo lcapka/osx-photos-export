@@ -31,6 +31,28 @@ class ApePhotos:
     QUERY_VERSIONS = [
                 """
                 SELECT
+                    link.Z_28ALBUMS,
+                    zga.Z_PK,
+                    zga.ZDIRECTORY,
+                    zga.ZFILENAME,
+                    zga.ZUUID,
+                    zaaa.ZORIGINALFILENAME,
+                    zga.ZHASADJUSTMENTS,
+                    zaaa.ZVIDEOCPDISPLAYVALUE,
+                    zga.ZLATITUDE,
+                    zga.ZLONGITUDE,
+                    zga.ZFAVORITE,
+                    group_concat(k.Z_40KEYWORDS)
+                FROM Z_28ASSETS link
+                LEFT JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK
+                LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = link.Z_3ASSETS
+                LEFT JOIN ZEXTENDEDATTRIBUTES zea ON zea.Z_PK = zga.ZEXTENDEDATTRIBUTES
+                LEFT JOIN Z_1KEYWORDS k ON k.Z_1ASSETATTRIBUTES = zaaa.Z_PK
+                WHERE zga.ZTRASHEDSTATE=0
+                GROUP BY link.Z_28ALBUMS, zga.Z_PK
+                """,
+                """
+                SELECT
                     link.Z_27ALBUMS,
                     zga.Z_PK,
                     zga.ZDIRECTORY,
