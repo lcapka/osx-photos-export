@@ -32,7 +32,7 @@ except ModuleNotFoundError:
 log = logging.getLogger("ape_exporter")
 
 re_jpeg = re.compile(r'\.jpg$', re.IGNORECASE)
-re_movies = re.compile(r'\.(mov|mp4)$', re.IGNORECASE)
+re_skip_exif = re.compile(r'^.*\.(mov|mp4|avi|bmp)$', re.IGNORECASE)
 
 
 class ApeExporter:
@@ -148,7 +148,7 @@ class ApeExporter:
 
         for data in data_list:
             filename = data['filename']
-            if re_movies.match(filename):
+            if re_skip_exif.match(filename) is None:
                 continue
 
             flags = []
@@ -175,6 +175,7 @@ class ApeExporter:
                 flags += ['-overwrite_original_in_place', '-P', filename]
                 try:
                     log.debug("Setting EXIF data %s", ' '.join(flag for flag in flags))
+                    # exiftool -EXIF:GPSLatitude=50.071653 -EXIF:GPSLatitudeRef=N -EXIF:GPSLongitude=14.401708 -EXIF:GPSLongitudeRef=E -Subject=ABC -overwrite_original_in_place -P test.HEIC
                     r = exif_tool.execute(*flags)
                     if ('1 image files updated' not in r) and ('1 image files unchanged' not in r):
                         raise ValueError(r)
