@@ -23,12 +23,6 @@ this program. If not, see <http://www.gnu.org/licenses/>.
 import subprocess, logging, os, shutil, re, json
 from ape_errors import *
 
-try:
-    import exiftool
-    exif_tool = exiftool.ExifTool()
-except ModuleNotFoundError:
-    exif_tool = None
-
 log = logging.getLogger("ape_exporter")
 
 re_jpeg = re.compile(r'\.jpg$', re.IGNORECASE)
@@ -42,22 +36,13 @@ class ApeExporter:
         self._photos_library_path = photos_library_path
         self._temp_directory = temp_directory
         self._originals_subdir_name = originals_subdir_name
-        self._update_exif = not not update_exif and exif_tool
-
-        if not not update_exif and exif_tool is None:
-            raise GenericExportError("The pyexiftool package is missing to update EXIF information. See http://smarnach.github.io/pyexiftool/")
+        self._update_exif = not not update_exif
 
         if os.listdir(temp_directory):
             raise GenericExportError("The temporary directory must be empty (%s)." % temp_directory)
 
         if not originals_subdir_name:
             raise GenericExportError("The originals sub-directory must be set.")
-
-        if not exif_tool.running:
-            if 'start' in dir(exif_tool):
-                exif_tool.start()
-            elif 'run' in dir(exif_tool):
-                exif_tool.run()
 
     def _export_internal(self, target_path, folder):
         target_path = os.path.join(target_path, folder['name'])
@@ -176,9 +161,11 @@ class ApeExporter:
                 try:
                     log.debug("Setting EXIF data %s", ' '.join(flag for flag in flags))
                     # exiftool -EXIF:GPSLatitude=50.071653 -EXIF:GPSLatitudeRef=N -EXIF:GPSLongitude=14.401708 -EXIF:GPSLongitudeRef=E -Subject=ABC -overwrite_original_in_place -P test.HEIC
-                    r = exif_tool.execute(*flags)
-                    if ('1 image files updated' not in r) and ('1 image files unchanged' not in r):
-                        raise ValueError(r)
+                    proc = subprocess.Popen(['exiftool'] + flags, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                    outs, errs = proc.communicate()
+                    if (b'1 image files updated' not in outs) and (b'1 image files unchanged' not in outs):
+                        log.error('%s %s %s' % (proc.returncode, '>%s<' % repr(outs), '>%s<' % repr(errs),))
+                        raise ValueError(outs)
                 except json.decoder.JSONDecodeError:
                     pass
                 except ValueError as e:
