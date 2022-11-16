@@ -133,7 +133,7 @@ class ApeExporter:
 
         for data in data_list:
             filename = data['filename']
-            if re_skip_exif.match(filename) is None:
+            if re_skip_exif.match(filename):
                 continue
 
             flags = []
