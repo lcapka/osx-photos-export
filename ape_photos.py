@@ -28,6 +28,39 @@ log = logging.getLogger("ape_photos")
 class ApePhotos:
     """Implements Photos related method"""
 
+    QUEYR_DUPLICATES = [
+                """
+                SELECT
+                    zga.Z_PK 'Photo ID',
+                    ga.ZPARENTFOLDER 'ParentID',
+                    ga2.ZTITLE AS 'Parent',
+                    zaaa.ZORIGINALFILENAME 'Filaname',
+                    link.Z_28ALBUMS 'Album ID',
+                    ga.ZTITLE 'Album name'
+                FROM
+                    Z_28ASSETS link
+                    LEFT JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK
+                    LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = link.Z_3ASSETS
+                    LEFT JOIN ZGENERICALBUM ga ON ga.Z_PK = link.Z_28ALBUMS
+                    LEFT JOIN ZGENERICALBUM ga2 ON ga2.Z_PK = ga.ZPARENTFOLDER
+                WHERE
+                    zga.Z_PK IN(
+                        SELECT
+                            zga.Z_PK FROM Z_28ASSETS link
+                        LEFT JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK                        
+                        LEFT JOIN ZGENERICALBUM ga ON ga.Z_PK = link.Z_28ALBUMS
+                    WHERE
+                        ga.ZDUPLICATETYPE IS NULL
+                        AND zga.ZTRASHEDSTATE = 0
+                    GROUP BY
+                        zga.Z_PK
+                    HAVING
+                        COUNT(link.Z_28ALBUMS) > 1)
+                ORDER BY
+                    zaaa.ZORIGINALFILENAME;
+                """
+    ]
+
     QUERY_VERSIONS = [
                 """
                 SELECT
@@ -187,6 +220,26 @@ class ApePhotos:
     def fetch_albums(self):
         cursor = self._db.cursor()
 
+        # Fetch duplicates
+        duplicates = []
+        for query in ApePhotos.QUEYR_DUPLICATES:
+            try:
+                cursor.execute(query)
+                duplicates = cursor.fetchall()
+                break
+            except sqlite3.OperationalError as e:
+                error = e
+        if duplicates:
+            log.warn("Duplicit album(s) for photo(s) found:")
+            duplicates = {i:list((d for d in duplicates if d[0] == i)) for i in set((d[0] for d in duplicates))}
+            for pid in duplicates:
+                dup = duplicates[pid]
+                log.warn("Photo: %s", pid)
+                log.warn("   Name: %s", dup[0][3]) 
+                for i in dup:
+                    log.warn("   Album {1}/{3} ({0}/{2})".format(i[1], i[2], i[4], i[5]))
+            log.warn("===")
+
         # Unsure how to identify root album. The ZKIND columns seems to be a bad idea, not sure if the ZCLOUDGUID column is better.
         # cursor.execute('SELECT Z_PK FROM ZGENERICALBUM WHERE ZKIND = 3999')
         cursor.execute("SELECT Z_PK FROM ZGENERICALBUM WHERE ZCLOUDGUID = '----Root-Folder----'")
@@ -198,7 +251,7 @@ class ApePhotos:
             root_id = root_id[0]
 
         # Fetch album data
-        cursor.execute("SELECT Z_PK, ZPARENTFOLDER, ZUUID, ZTITLE FROM ZGENERICALBUM WHERE ZTITLE IS NOT NULL")
+        cursor.execute("SELECT Z_PK, ZPARENTFOLDER, ZUUID, ZTITLE FROM ZGENERICALBUM WHERE ZTITLE IS NOT NULL AND ZDUPLICATETYPE IS NULL")
         album_temp = cursor.fetchall()
         log.debug("%s albums found...", len(album_temp))
 
