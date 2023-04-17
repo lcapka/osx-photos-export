@@ -86,7 +86,7 @@ class ApeExporter:
                     log.debug("Copying %s to %s", source_filename, to_filename)
                     shutil.copyfile(source_filename, to_filename)
                 except FileNotFoundError:
-                    log.error("Export has failed for %s", photo)
+                    log.error("Export has failed for %s (%s)", photo, source_filename)
                     failed_direct_access.append(photo)
                     continue
 

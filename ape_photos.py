@@ -39,19 +39,18 @@ class ApePhotos:
                     ga.ZTITLE 'Album name'
                 FROM
                     Z_28ASSETS link
-                    LEFT JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK
-                    LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = link.Z_3ASSETS
-                    LEFT JOIN ZGENERICALBUM ga ON ga.Z_PK = link.Z_28ALBUMS
-                    LEFT JOIN ZGENERICALBUM ga2 ON ga2.Z_PK = ga.ZPARENTFOLDER
+                    JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK AND zga.ZTRASHEDSTATE = 0
+                    JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = link.Z_3ASSETS
+                    JOIN ZGENERICALBUM ga ON ga.Z_PK = link.Z_28ALBUMS AND ga.ZTRASHEDSTATE = 0
+                    JOIN ZGENERICALBUM ga2 ON ga2.Z_PK = ga.ZPARENTFOLDER AND ga2.ZTRASHEDSTATE = 0
                 WHERE
                     zga.Z_PK IN(
                         SELECT
                             zga.Z_PK FROM Z_28ASSETS link
-                        LEFT JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK                        
-                        LEFT JOIN ZGENERICALBUM ga ON ga.Z_PK = link.Z_28ALBUMS
+                        JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK AND zga.ZTRASHEDSTATE = 0
+                        JOIN ZGENERICALBUM ga ON ga.Z_PK = link.Z_28ALBUMS AND ga.ZTRASHEDSTATE = 0
                     WHERE
                         ga.ZDUPLICATETYPE IS NULL
-                        AND zga.ZTRASHEDSTATE = 0
                     GROUP BY
                         zga.Z_PK
                     HAVING
@@ -77,7 +76,7 @@ class ApePhotos:
                     zga.ZFAVORITE,
                     group_concat(k.Z_40KEYWORDS)
                 FROM Z_28ASSETS link
-                LEFT JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK
+                JOIN ZASSET zga ON link.Z_3ASSETS = zga.Z_PK
                 LEFT JOIN ZADDITIONALASSETATTRIBUTES zaaa ON zaaa.ZASSET = link.Z_3ASSETS
                 LEFT JOIN ZEXTENDEDATTRIBUTES zea ON zea.Z_PK = zga.ZEXTENDEDATTRIBUTES
                 LEFT JOIN Z_1KEYWORDS k ON k.Z_1ASSETATTRIBUTES = zaaa.Z_PK
@@ -237,12 +236,15 @@ class ApePhotos:
                 log.warn("Photo: %s", pid)
                 log.warn("   Name: %s", dup[0][3]) 
                 for i in dup:
-                    log.warn("   Album {1}/{3} ({0}/{2})".format(i[1], i[2], i[4], i[5]))
+                    if i[1] is None:
+                        log.warn("   Album {3} ({2})".format(i[1], i[2], i[4], i[5]))
+                    else:
+                        log.warn("   Album {1}/{3} ({0}/{2})".format(i[1], i[2], i[4], i[5]))
             log.warn("===")
 
         # Unsure how to identify root album. The ZKIND columns seems to be a bad idea, not sure if the ZCLOUDGUID column is better.
         # cursor.execute('SELECT Z_PK FROM ZGENERICALBUM WHERE ZKIND = 3999')
-        cursor.execute("SELECT Z_PK FROM ZGENERICALBUM WHERE ZCLOUDGUID = '----Root-Folder----'")
+        cursor.execute("SELECT Z_PK FROM ZGENERICALBUM WHERE ZCLOUDGUID = '----Root-Folder----' AND ZTRASHEDSTATE = 0")
 
         root_id = cursor.fetchone()
         if not root_id:
@@ -251,7 +253,7 @@ class ApePhotos:
             root_id = root_id[0]
 
         # Fetch album data
-        cursor.execute("SELECT Z_PK, ZPARENTFOLDER, ZUUID, ZTITLE FROM ZGENERICALBUM WHERE ZTITLE IS NOT NULL AND ZDUPLICATETYPE IS NULL")
+        cursor.execute("SELECT Z_PK, ZPARENTFOLDER, ZUUID, ZTITLE FROM ZGENERICALBUM WHERE ZTITLE IS NOT NULL AND ZDUPLICATETYPE IS NULL AND ZTRASHEDSTATE = 0")
         album_temp = cursor.fetchall()
         log.debug("%s albums found...", len(album_temp))
 
