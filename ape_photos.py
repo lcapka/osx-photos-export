@@ -159,6 +159,31 @@ class ApePhotos:
             raise GenericExportError("The database file wasn't not found (%s)." % db_filename)
         self._db.text_factory = lambda x: unicodedata.normalize("NFC", x.decode("utf-8"))
 
+    def _create_photo_record(self, photo, keywords_map={}):
+        # Check data
+        latitude, longitude = photo[8:10]
+        gps_valid = isinstance(latitude, (int, float,)) and isinstance(longitude, (int, float,)) and (-90 <= latitude <= 90) and (-180 <= longitude <= 80)
+        if not gps_valid:
+            latitude = longitude = None
+        keywords_list = [kw for kw in [keywords_map.get(int(i), None) for i in str(photo[11] or '').split(',') if i] if kw]
+
+        return {
+            'id': photo[1],
+            'uuid': photo[4],
+            'directory': photo[2],
+            'filename': photo[3],
+            'originalfilename': photo[5],
+            'adjusted': not not photo[6],
+            'live': photo[7] > 0,
+            # Additional metadata
+            'latitude': latitude,
+            'longitude': longitude,
+            'favourite': photo[10],
+            'keywords': keywords_list,
+            'has_exif_data': any(keywords_list) or gps_valid
+        }
+
+
     def _parse_tree(self, parent_id, album_temp, photo_temp, keywords_temp):
         keywords_map = {i:j for i,j in keywords_temp}
 
@@ -180,28 +205,7 @@ class ApePhotos:
                 if photo[0] != i[0]:
                     continue
 
-                # Check data
-                latitude, longitude = photo[8:10]
-                gps_valid = isinstance(latitude, (int, float,)) and isinstance(longitude, (int, float,)) and (-90 <= latitude <= 90) and (-180 <= longitude <= 80)
-                if not gps_valid:
-                    latitude = longitude = None
-                keywords_list = [kw for kw in [keywords_map.get(int(i), None) for i in str(photo[11] or '').split(',') if i] if kw]
-
-                photos.append({
-                    'id': photo[1],
-                    'uuid': photo[4],
-                    'directory': photo[2],
-                    'filename': photo[3],
-                    'originalfilename': photo[5],
-                    'adjusted': not not photo[6],
-                    'live': photo[7] > 0,
-                    # Additional metadata
-                    'latitude': latitude,
-                    'longitude': longitude,
-                    'favourite': photo[10],
-                    'keywords': keywords_list,
-                    'has_exif_data': any(keywords_list) or gps_valid
-                    })
+                photos.append(self._create_photo_record(photo, keywords_map))
 
             if photos:
                 child['photos'] = photos
@@ -234,7 +238,7 @@ class ApePhotos:
             for pid in duplicates:
                 dup = duplicates[pid]
                 log.warn("Photo: %s", pid)
-                log.warn("   Name: %s", dup[0][3]) 
+                log.warn("   Name: %s", dup[0][3])
                 for i in dup:
                     if i[1] is None:
                         log.warn("   Album {3} ({2})".format(i[1], i[2], i[4], i[5]))
@@ -253,7 +257,7 @@ class ApePhotos:
             root_id = root_id[0]
 
         # Fetch album data
-        cursor.execute("SELECT Z_PK, ZPARENTFOLDER, ZUUID, ZTITLE FROM ZGENERICALBUM WHERE ZTITLE IS NOT NULL AND ZDUPLICATETYPE IS NULL AND ZTRASHEDSTATE = 0")
+        cursor.execute("SELECT Z_PK, ZPARENTFOLDER, ZUUID, ZTITLE, ZKIND FROM ZGENERICALBUM WHERE ZTITLE IS NOT NULL AND ZDUPLICATETYPE IS NULL AND ZTRASHEDSTATE = 0")
         album_temp = cursor.fetchall()
         log.debug("%s albums found...", len(album_temp))
 
@@ -281,4 +285,24 @@ class ApePhotos:
 
         # Merge loaded information
         log.debug("Parsing album tree with root id %s", root_id)
-        return self._parse_tree(root_id, album_temp, photo_temp, keywords_temp)
+        x = self._parse_tree(root_id, album_temp, photo_temp, keywords_temp)
+        shared_albums = []
+        x.append({
+            'id': None,
+            'uuid': None,
+            'name': 'Shared',
+            'children': shared_albums
+        })
+
+        # Append shared albums
+        for i in album_temp:
+            # ZKIND 1505 = shared album
+            if i[4] == 1505:
+                shared_albums.append({
+                    'id': i[0],
+                    'uuid': i[2],
+                    'name': i[3],
+                    'photos': [self._create_photo_record(p) for p in photo_temp if p[0] == i[0]]
+                })
+
+        return x
